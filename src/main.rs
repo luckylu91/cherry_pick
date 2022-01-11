@@ -16,6 +16,17 @@ impl Deref for Grid {
     }
 }
 
+fn pairs_of<'a, T>(v: Vec<T>) -> Box<dyn Iterator<Item = (T, T)> + 'a>
+where T: Copy + 'a
+{
+    let n = v.len();
+    let it = (0..=n - 2)
+        .map(move |k| iter::repeat(k).zip(k..=n - 1))
+        .flat_map(|r| r)
+        .map(move |(k1, k2)| (v[k1], v[k2]));
+    Box::new(it)
+}
+
 impl Grid {
     fn new(data: Vec<Vec<i32>>) -> Grid {
         if data.len() == 0 {
@@ -33,6 +44,7 @@ impl Grid {
     }
 
     fn pairs_iter_step_i<'a>(&'a self, i: i32) -> Box<dyn Iterator<Item = PointPair> + 'a> {
+
         if i == 0  || i >= 2 * self.size - 2 {
             panic!("begin at step 1, stop at step 2 * size - 3")
         }
@@ -41,18 +53,21 @@ impl Grid {
         } else {
             2 * self.size - 2 - i
         };
-        let k_values = (0..=k_max-1)
-            .map(move |k| iter::repeat(k).zip(k+1..=k_max))
-            .flat_map(|r| r);
 
-        let coords = k_values.map(move |(k1, k2)| ((k1, k_max - k1), (k2, k_max - k2)));
-        let closure: Box<dyn Fn(((i32, i32), (i32, i32))) -> PointPair> =
+        let diag_coords = (0..=k_max).map(move |k| (k, k_max - k));
+        let closure: Box<dyn Fn((i32, i32)) -> Point> =
             if i <= self.size - 1 {
-                Box::new(|(p1, p2)| PointPair::from_tuples(p1, p2))
+                Box::new(|p| Point::from_tuple(p))
             } else {
-                Box::new(|(p1, p2)| PointPair::from_tuples_sym(p1, p2, self.size))
+                Box::new(|p| Point::from_tuple_sym(p, self.size))
             };
-        Box::new(coords.map(closure))
+        let diag_coords = diag_coords.map(closure)
+            .filter(|p| p.is_valid(&self))
+            .collect::<Vec<Point>>();
+        let n_valid = diag_coords.len();
+        let diag_pairs_coords = pairs_of(diag_coords)
+            .map(|(p1, p2)| PointPair(p1, p2));
+        Box::new(diag_pairs_coords)
     }
 
     fn steps_i(&self) ->  Box<dyn Iterator<Item = i32>> {
@@ -68,11 +83,17 @@ impl Point {
     fn from_tuple((x, y): (i32, i32)) -> Self {
         Point(x, y)
     }
+
     fn from_tuple_sym((x, y): (i32, i32), size: i32) -> Self {
         Point(size - 1 - x, size - 1 - y)
     }
+
     fn score(&self, grid: &Grid) -> i32 {
         (*grid)[self.0 as usize][self.1 as usize]
+    }
+
+    fn is_valid(&self, grid: &Grid) -> bool {
+        self.score(grid) >= 0
     }
 }
 
@@ -86,14 +107,34 @@ impl From<(i32, i32)> for Point {
 struct PointPair(Point, Point);
 
 impl PointPair {
-    fn from_tuples(x: (i32, i32), y: (i32, i32)) -> Self {
-        PointPair(Point::from_tuple(x), Point::from_tuple(y))
-    }
-    fn from_tuples_sym(x: (i32, i32), y: (i32, i32), size: i32) -> Self {
-        PointPair(Point::from_tuple_sym(x, size), Point::from_tuple_sym(y, size))
-    }
+    // fn from_tuples(x: (i32, i32), y: (i32, i32)) -> Self {
+    //     PointPair(Point::from_tuple(x), Point::from_tuple(y))
+    // }
+    // fn from_tuples_sym(x: (i32, i32), y: (i32, i32), size: i32) -> Self {
+    //     PointPair(Point::from_tuple_sym(x, size), Point::from_tuple_sym(y, size))
+    // }
+
     fn zero() -> Self {
         PointPair(Point(0, 0), Point(0, 0))
+    }
+
+    fn predecessors(&self, grid: &Grid) -> Box<dyn Iterator<Item = PointPair>> {
+        let (p1, p2) = if self.0.0 < self.1.0 {
+            (self.0, self.1)
+        } else {
+            (self.1, self.0)
+        };
+        let predecessors = if self.1.0 - self.0.0 == 1 {
+            vec![(p1.0 - 1, p1.1), (p1.0, p1.1 - 1), (p2.0, p2.1 - 1)]
+        } else {
+            vec![(p1.0 - 1, p1.1), (p1.0, p1.1 - 1), (p2.0 - 1, p2.1), (p2.0, p2.1 - 1)]
+        }.into_iter()
+        .map(|t| Point::from_tuple(t))
+        .filter(|p @ Point(x, y)| *x >= 0 && *y >= 0 && p.is_valid(grid))
+        .collect::<Vec<_>>();
+        let predecessors = pairs_of(predecessors)
+            .map(|(p1, p2)| PointPair(p1, p2));
+        Box::new(predecessors)
     }
 }
 
@@ -138,7 +179,8 @@ pub fn cherry_pickup(grid: Vec<Vec<i32>>) -> i32 {
     scores.insert(PointPair::zero(), PairScore::start());
 
     for i in grid.steps_i() {
-        
+        let pairs = grid.pairs_iter_step_i(i);
+
     }
 
 
@@ -184,3 +226,4 @@ mod tests {
         }
     }
 }
+
