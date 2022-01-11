@@ -16,15 +16,18 @@ impl Deref for Grid {
     }
 }
 
-fn pairs_of<'a, T>(v: Vec<T>) -> Box<dyn Iterator<Item = (T, T)> + 'a>
+fn pairs_of<'a, T>(v: Vec<T>) -> Option<Box<dyn Iterator<Item = (T, T)> + 'a>>
 where T: Copy + 'a
 {
     let n = v.len();
+    if n <= 1 {
+        return None;
+    }
     let it = (0..=n - 2)
         .map(move |k| iter::repeat(k).zip(k..=n - 1))
         .flat_map(|r| r)
         .map(move |(k1, k2)| (v[k1], v[k2]));
-    Box::new(it)
+    Some(Box::new(it))
 }
 
 impl Grid {
@@ -65,7 +68,7 @@ impl Grid {
             .filter(|p| p.is_valid(&self))
             .collect::<Vec<Point>>();
         let n_valid = diag_coords.len();
-        let diag_pairs_coords = pairs_of(diag_coords)
+        let diag_pairs_coords = pairs_of(diag_coords).unwrap()
             .map(|(p1, p2)| PointPair(p1, p2));
         Box::new(diag_pairs_coords)
     }
@@ -118,7 +121,12 @@ impl PointPair {
         PointPair(Point(0, 0), Point(0, 0))
     }
 
-    fn predecessors(&self, grid: &Grid) -> Box<dyn Iterator<Item = PointPair>> {
+    fn end(grid: &Grid) -> Self {
+        let s = grid.size;
+        PointPair(Point(s - 1, s - 1), Point(s - 1, s - 1))
+    }
+
+    fn predecessors(&self, grid: &Grid) -> Option<Box<dyn Iterator<Item = PointPair>>> {
         let (p1, p2) = if self.0.0 < self.1.0 {
             (self.0, self.1)
         } else {
@@ -132,12 +140,17 @@ impl PointPair {
         .map(|t| Point::from_tuple(t))
         .filter(|p @ Point(x, y)| *x >= 0 && *y >= 0 && p.is_valid(grid))
         .collect::<Vec<_>>();
-        let predecessors = pairs_of(predecessors)
-            .map(|(p1, p2)| PointPair(p1, p2));
-        Box::new(predecessors)
+        let predecessors = pairs_of(predecessors);
+        if let Some(predecessors) = predecessors {
+            let predecessors = predecessors.map(|(p1, p2)| PointPair(p1, p2));
+            Some(Box::new(predecessors))
+        } else {
+            None
+        }
     }
 }
 
+#[derive(Clone, Debug)]
 struct PairScore {
     score: i32,
     path1: Vec<Point>,
@@ -155,7 +168,7 @@ impl PairScore {
 
     fn new(score: i32) -> PairScore {
         PairScore {
-            score: 0,
+            score,
             path1: Vec::new(),
             path2: Vec::new(),
         }
@@ -172,19 +185,35 @@ impl PairScore {
 
 type Scores = HashMap<PointPair, PairScore>;
 
-pub fn cherry_pickup(grid: Vec<Vec<i32>>) -> i32 {
+fn cherry_pickup(grid: Vec<Vec<i32>>) -> PairScore {
     let grid = Grid::new(grid);
 
     let mut scores = Scores::new();
     scores.insert(PointPair::zero(), PairScore::start());
 
     for i in grid.steps_i() {
-        let pairs = grid.pairs_iter_step_i(i);
-
+        for pair @ PointPair(p1, p2) in grid.pairs_iter_step_i(i) {
+            let predecessors = pair.predecessors(&grid);
+            if predecessors.is_none() {
+                scores.insert(PointPair (p1, p2), PairScore::new(-1));
+                continue;
+            }
+            let predecessors = predecessors.unwrap();
+            let predecessors = predecessors.collect::<Vec<_>>();
+            println!("{:?}", predecessors);
+            let (best_predecessors, best_pairscore) = predecessors.iter()
+                .map(|ppair| (ppair, &scores[&ppair]))
+                .max_by_key(|(ppair, pairscore)| pairscore.score)
+                .unwrap();
+            let score = best_pairscore.score + p1.score(&grid) + p2.score(&grid);
+            let mut path1 = best_pairscore.path1.clone();
+            let mut path2 = best_pairscore.path2.clone();
+            path1.push(p1.clone());
+            path2.push(p2.clone());
+            scores.insert(PointPair (p1, p2), PairScore{score, path1, path2});
+        }
     }
-
-
-    0
+    scores[&PointPair::end(&grid)].clone()
 }
 
 
@@ -224,6 +253,19 @@ mod tests {
             println!("i = {}", i);
             grid.pairs_iter_step_i(i).for_each(|x| println!("{:?}", x));
         }
+    }
+
+    #[test]
+    fn solve_4() {
+        let grid = vec![
+            vec![0, 1, 1, 0],
+            vec![0, 0, 0, 0],
+            vec![1, 0, 0, 0],
+            vec![0, 1, 0, 0],
+        ];
+        let grid = Grid::new(grid);
+        println!("Grid size is 4\n");
+        println!("{:?}", cherry_pickup(grid.data));
     }
 }
 
