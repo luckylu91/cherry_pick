@@ -15,31 +15,48 @@ fn cherry_pickup(grid: Vec<Vec<i32>>) -> PairScore {
 
     for i in grid.steps_i() {
         for pair @ PointPair(p1, p2) in grid.pairs_iter_step_i(i) {
+            println!("pair: {}", pair);
             let predecessors = pair.predecessors(&grid);
-            if predecessors.is_none() {
-                scores.insert(PointPair (p1, p2), PairScore::new(-1));
+            if predecessors.len() == 0 {
+                scores.insert(pair, PairScore::new(-1));
                 continue;
             }
-            let predecessors = predecessors.unwrap();
-            let predecessors = predecessors.collect::<Vec<_>>();
             println!("{:?}", predecessors);
-            let (best_predecessors, best_pairscore) = predecessors.iter()
-                .map(|ppair| (ppair, &scores[&ppair]))
-                .max_by_key(|(ppair, pairscore)| pairscore.score)
+            let (_, best_pairscore) = predecessors.iter()
+                .map(|ppair| {
+                    println!("Accessing {}", ppair);
+                    (ppair, &scores[&ppair])
+                })
+                .max_by_key(|(_, pairscore)| pairscore.score)
                 .unwrap();
-            let score = best_pairscore.score + p1.score(&grid) + p2.score(&grid);
+            // let score = best_pairscore.clone();
+            // score.append
+            let score = best_pairscore.score + if p1 != p2 {
+                p1.score(&grid) + p2.score(&grid)
+            } else {
+                p1.score(&grid)
+            };
             let mut path1 = best_pairscore.path1.clone();
             let mut path2 = best_pairscore.path2.clone();
             path1.push(p1.clone());
             path2.push(p2.clone());
             scores.insert(PointPair (p1, p2), PairScore{score, path1, path2});
         }
+        println!("scores: {:#?}\n", scores);
     }
     scores[&PointPair::end(&grid)].clone()
 }
 
 
 fn main() {
+    let grid = vec![
+        vec![0, 0, 0, 0],
+        vec![0, -1, 1, 0],
+        vec![1, 0, 0, 0],
+        vec![0, 0, 0, 0],
+    ];
+    let score = cherry_pickup(grid);
+    println!("END:\n{:?}", score);
 }
 
 #[cfg(test)]

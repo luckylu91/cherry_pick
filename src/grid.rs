@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter, Debug};
 use std::ops::Deref;
 use std::iter;
 use crate::pair_iter::pairs_of;
@@ -9,10 +10,10 @@ pub struct Grid {
     pub size: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Point(pub usize, pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PointPair(pub Point, pub Point);
 
 
@@ -41,8 +42,8 @@ impl Grid {
 
     pub fn pairs_iter_step_i<'a>(&'a self, i: usize) -> Box<dyn Iterator<Item = PointPair> + 'a> {
 
-        if i == 0  || i >= 2 * self.size - 2 {
-            panic!("begin at step 1, stop at step 2 * size - 3")
+        if i == 0  || i >= 2 * self.size - 1 {
+            panic!("begin at step 1, stop at step 2 * size - 2")
         }
         let k_max = if i <= self.size - 1 {
             i
@@ -59,15 +60,15 @@ impl Grid {
             };
         let diag_coords = diag_coords.map(closure)
             .filter(|p| p.is_valid(&self))
+            .sorted_by_key(|p| p.0)
             .collect::<Vec<Point>>();
-        let n_valid = diag_coords.len();
         let diag_pairs_coords = pairs_of(diag_coords).unwrap()
             .map(|(p1, p2)| PointPair(p1, p2));
         Box::new(diag_pairs_coords)
     }
 
     pub fn steps_i(&self) ->  Box<dyn Iterator<Item = usize>> {
-        Box::new(1 .. 2 * self.size - 2)
+        Box::new(1 .. 2 * self.size - 1)
     }
 }
 
@@ -108,6 +109,17 @@ impl From<(usize, usize)> for Point {
     }
 }
 
+impl Display for Point {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+impl Debug for Point {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self)
+    }
+}
+
 impl PointPair {
     pub fn zero() -> Self {
         PointPair(Point(0, 0), Point(0, 0))
@@ -118,21 +130,26 @@ impl PointPair {
         PointPair(Point(s - 1, s - 1), Point(s - 1, s - 1))
     }
 
-    pub fn predecessors<'a>(&self, grid: &'a Grid) -> Box<dyn Iterator<Item = PointPair> + 'a> {
-        // let (p1, p2) = if self.0.0 < self.1.0 {
-        //     (self.0, self.1)
-        // } else {
-        //     (self.1, self.0)
-        // };
-        let pred1 = self.0.valid_predecessors(grid);
-        let pred2 = self.1.valid_predecessors(grid);
-        Box::new(pred1.into_iter().cartesian_product(pred2.into_iter()).map(|(p1, p2)| PointPair(p1, p2)))
+    pub fn predecessors<'a>(&self, grid: &'a Grid) -> Vec<PointPair> {
+        let (p1, p2) = if self.0.0 < self.1.0 {
+            (self.0, self.1)
+        } else {
+            (self.1, self.0)
+        };
+        let pred1 = p1.valid_predecessors(grid);
+        let pred2 = p2.valid_predecessors(grid);
+        // Box::new(pred1.into_iter().cartesian_product(pred2.into_iter()).map(|(p1, p2)| PointPair(p1, p2)))
+        pred1.into_iter()
+            .cartesian_product(pred2.into_iter())
+            .filter(|(pa, pb)| pa.0 <= pb.0)
+            .map(|(p1, p2)| PointPair(p1, p2))
+            .collect_vec()
         // let predecessors = pred1.iter()
         //     .map(move |p1| iter::repeat(p1).zip(p2.valid_predecessors(grid).iter()).cloned().collect::<Vec<(Point, Point)>>())
         //     .flat_map(|x| x)
         //     .map(|(p1, p2)| PointPair(p1.clone(), p2.clone()));
         // Box::new(predecessors)
-        // let predecessors = if self.1.0 - self.0.0 == 1 {
+        // if self.1.0 - self.0.0 == 1 {
         //     vec![(p1.0 - 1, p1.1), (p1.0, p1.1 - 1), (p2.0, p2.1 - 1)]
         // } else {
         //     vec![(p1.0 - 1, p1.1), (p1.0, p1.1 - 1), (p2.0 - 1, p2.1), (p2.0, p2.1 - 1)]
@@ -149,6 +166,21 @@ impl PointPair {
         // }
     }
 }
+
+
+impl Display for PointPair {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "|{},{}; {},{}|", self.0.0, self.0.1, self.1.0, self.1.1)
+    }
+}
+
+impl Debug for PointPair {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self)
+    }
+}
+
+
 
 
 #[cfg(test)]

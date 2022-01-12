@@ -25,11 +25,15 @@ impl PairScore {
         }
     }
 
-    pub fn append(&self, grid: Grid, p1: Point, p2: Point) -> PairScore {
-        let delta = p1.score(&grid) + p2.score(&grid);
-        let mut pscore = PairScore::new(self.score + delta);
-        pscore.path1.extend(self.path1.iter().chain(iter::once(&p1)));
-        pscore.path2.extend(self.path2.iter().chain(iter::once(&p2)));
-        pscore
-    }
+    // pub fn append(&self, grid: &Grid, p1: &Point, p2: &Point) -> PairScore {
+    //     let delta = if p1 != p2 {
+    //         p1.score(&grid) + p2.score(&grid)
+    //     } else {
+    //         p1.score(&grid)
+    //     };
+    //     let mut pscore = PairScore::new(self.score + delta);
+    //     pscore.path1.extend(self.path1.iter().chain(iter::once(&p1)));
+    //     pscore.path2.extend(self.path2.iter().chain(iter::once(&p2)));
+    //     pscore
+    // }
 }
